@@ -3,16 +3,14 @@ const axios = require("axios");
 const app = express();
 const port = 3000;
 
-// The number of countries each represeantive can have
-const repQuotaMax = 7;
-const repQuotaMin = 3;
-
 require("dotenv").config();
 
 const { MongoClient } = require("mongodb");
-const { send } = require("express/lib/response");
-const { all } = require("express/lib/application");
 const client = new MongoClient(process.env.CONNECTION_URI);
+
+// The number of countries each represeantive can have
+const repQuotaMax = 7;
+const repQuotaMin = 3;
 
 async function main() {
   // Create MongoDB connection
@@ -137,10 +135,12 @@ async function main() {
                       index++;
                     }
                   }
+                // Copying region-specific list to the general list
                 allReps = [...allReps, ...regionReps];
               })
           );
         }
+        // Waiting for all requests to resolve promises. Then send response.
         Promise.all(promises).then(() => res.send(allReps));
       })
       .catch((error) => {

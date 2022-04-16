@@ -97,6 +97,7 @@ async function main() {
       });
   });
 
+  // Optimal endpoint
   app.get("/optimal", async (req, res) => {
     var allReps = [];
     // Request to get minimum nunber of salesreps for each region

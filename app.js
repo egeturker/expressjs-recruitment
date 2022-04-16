@@ -10,6 +10,8 @@ const repQuotaMin = 3;
 require("dotenv").config();
 
 const { MongoClient } = require("mongodb");
+const { send } = require("express/lib/response");
+const { all } = require("express/lib/application");
 const client = new MongoClient(process.env.CONNECTION_URI);
 
 async function main() {
@@ -33,9 +35,9 @@ async function main() {
     }
     // Filter using the region parameter
     else {
-      region = req.query.region;
+      regionPattern = req.query.region;
       const filteredCountries = await collection
-        .find({ region: region })
+        .find({ region: { $regex: `^${regionPattern}`, $options: "i" } }) //regex for case insensitivity
         // _id is suppressed here since the example in the document did not have _id field
         .project({ _id: 0 })
         .toArray();
@@ -43,7 +45,7 @@ async function main() {
     }
   });
 
-  //Salesrep endpoint
+  // Salesrep endpoint
   app.get("/salesrep", async (req, res) => {
     // GET request on countries endpoint
     axios
@@ -89,6 +91,56 @@ async function main() {
           delete region.numberOfCountries;
         }
         res.send(regions);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  });
+
+  app.get("/optimal", async (req, res) => {
+    var allReps = [];
+    // Request to get minimum nunber of salesreps for each region
+    axios
+      .get("http://localhost:3000/salesrep")
+      .then((response) => {
+        regions = response.data;
+        for (region of regions) {
+          const regionReps = [];
+          // Creation of salesrep objects
+          for (var i = 0; i < region.minSalesReq; i++) {
+            regionReps.push({
+              region: region.region,
+              countryList: [],
+              countryCount: 0,
+            });
+          }
+          // We have to wait for the requests for each region to finish. We collect the promises.
+          promises = [];
+          promises.push(
+            // Request to get the region-specific country list.
+            axios
+              .get(
+                `http://localhost:3000/countries?region=${region.regionName}`
+              )
+              .then((res) => {
+                regionCountries = res.data;
+                numberOfRegionCountries = regionCountries.length;
+                index = 0;
+                // Distributing countries one by one to get optimal distribution
+                while (index < numberOfRegionCountries)
+                  for (rep of regionReps) {
+                    if (index < numberOfRegionCountries) {
+                      rep.countryList.push(regionCountries[index].name);
+                      rep.region = regionCountries[index].region;
+                      rep.countryCount++;
+                      index++;
+                    }
+                  }
+                allReps = [...allReps, ...regionReps];
+              })
+          );
+        }
+        Promise.all(promises).then(() => res.send(allReps));
       })
       .catch((error) => {
         console.error(error);

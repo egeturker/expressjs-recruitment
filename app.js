@@ -1,6 +1,11 @@
 const express = require("express");
+const axios = require("axios");
 const app = express();
 const port = 3000;
+
+// The number of countries each represeantive can have
+const repQuotaMax = 7;
+const repQuotaMin = 3;
 
 require("dotenv").config();
 
@@ -36,6 +41,58 @@ async function main() {
         .toArray();
       res.send(filteredCountries);
     }
+  });
+
+  //Salesrep endpoint
+  app.get("/salesrep", async (req, res) => {
+    // GET request on countries endpoint
+    axios
+      .get("http://localhost:3000/countries")
+      .then((response) => {
+        const allCountries = response.data;
+        const regions = [];
+
+        // extract all of the regions from countries
+        for (let country of allCountries) {
+          if (
+            !regions.some(
+              (region) => region.regionName === country.region.toLowerCase()
+            )
+          ) {
+            regions.push({
+              regionName: country.region.toLowerCase(),
+              numberOfCountries: 0,
+              minSalesReq: 0,
+              maxSalesReq: 0,
+            });
+          }
+        }
+
+        // count the number of countries in each region
+        for (let country of allCountries) {
+          for (let region of regions) {
+            if (
+              region.regionName.toLowerCase() === country.region.toLowerCase()
+            )
+              region.numberOfCountries++;
+          }
+        }
+
+        // distribute representatives to the regions
+        for (let region of regions) {
+          var minReps = ~~(region.numberOfCountries / repQuotaMax);
+          var maxReps = ~~(region.numberOfCountries / repQuotaMin);
+          if (region.numberOfCountries % repQuotaMin > 0) maxReps += 1;
+          if (region.numberOfCountries % repQuotaMax > 0) minReps += 1;
+          region.minSalesReq = minReps;
+          region.maxSalesReq = maxReps;
+          delete region.numberOfCountries;
+        }
+        res.send(regions);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
   });
 
   app.listen(port, () => {
